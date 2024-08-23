@@ -117,8 +117,8 @@ impl ByteLevel {
 impl PreTokenizer for ByteLevel {
     fn pre_tokenize(&self, pretokenized: &mut PreTokenizedString) -> Result<()> {
         let re_ref: &SysRegex = &RE;
-        pretokenized.split(|_, mut normalized| {
-            if self.add_prefix_space && !normalized.get().starts_with(' ') {
+        pretokenized.split(|i, mut normalized| {
+            if i == 0 && self.add_prefix_space && !normalized.get().starts_with(' ') {
                 normalized.prepend(" ");
             }
             if self.use_regex {

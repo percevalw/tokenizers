@@ -1240,13 +1240,22 @@ where
                 s
             }),
             |seq| {
-                let normalized = self.do_normalize(seq.as_ref())?;
+                // let normalized = self.do_normalize(seq.as_ref())?;
+                // let pre_tokenized = self.do_pre_tokenize(normalized)?;
+                let normalized = self
+                    .added_vocabulary
+                    .extract_and_normalize(self.normalizer.as_ref(), seq.as_ref());
                 let pre_tokenized = self.do_pre_tokenize(normalized)?;
-                Ok(pre_tokenized
+
+                let result = (pre_tokenized
                     .get_splits(OffsetReferential::Original, OffsetType::Byte)
                     .into_iter()
+                    // remove already tokenized sequences (tokens is not None)
+                    .filter(|(_,_,tokens)| tokens.is_none())
                     .map(|(s, _, _)| s.to_owned())
-                    .collect())
+                    .collect());
+
+                Ok(result)
             },
         )?;
         if let Some(pbar) = progress {

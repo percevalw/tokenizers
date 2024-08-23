@@ -25,6 +25,9 @@ pub struct AddedToken {
     pub normalized: bool,
     /// Whether this token is special
     pub special: bool,
+    /// Whether this token should be matched from right to left
+    #[serde(default)]
+    pub rtl: bool,
 }
 
 impl AddedToken {
@@ -72,6 +75,12 @@ impl AddedToken {
         self.special = special;
         self
     }
+    /// Specify whether this token should be matched from right to left
+    #[must_use]
+    pub fn rtl(mut self, rtl: bool) -> Self {
+        self.rtl = rtl;
+        self
+    }
 }
 impl Default for AddedToken {
     fn default() -> Self {
@@ -82,6 +91,7 @@ impl Default for AddedToken {
             rstrip: false,
             normalized: true,
             special: false,
+            rtl: false,
         }
     }
 }
@@ -161,6 +171,11 @@ pub struct AddedVocabulary {
     /// A RegexSet containing all the normalized patterns used to split on AddedTokens
     split_normalized_trie: MatchingSet,
 
+    /// A RegexSet containing all the non-normalized patterns used to split on AddedTokens
+    split_trie_rtl: MatchingSet,
+    /// A RegexSet containing all the normalized patterns used to split on AddedTokens
+    split_normalized_trie_rtl: MatchingSet,
+
     /// Whether or not special tokens should be splitted when encoding. This is equivalent to ignoring them
     encode_special_tokens: bool,
 }
@@ -175,6 +190,14 @@ impl AddedVocabulary {
             .match_kind(MatchKind::LeftmostLongest)
             .build::<_, &&[u8]>([])
             .expect("The normalized trie should build correctly");
+        let trie_rtl = AhoCorasickBuilder::new()
+            .match_kind(MatchKind::LeftmostLongest)
+            .build::<_, &&[u8]>([])
+            .expect("The RTL trie should build correctly");
+        let normalized_trie_rtl = AhoCorasickBuilder::new()
+            .match_kind(MatchKind::LeftmostLongest)
+            .build::<_, &&[u8]>([])
+            .expect("The normalized RTL trie should build correctly");
         Self {
             added_tokens_map: HashMap::new(),
             added_tokens_map_r: HashMap::new(),
@@ -183,6 +206,8 @@ impl AddedVocabulary {
             special_tokens_set: HashSet::new(),
             split_trie: (trie, vec![]),
             split_normalized_trie: (normalized_trie, vec![]),
+            split_trie_rtl: (trie_rtl, vec![]),
+            split_normalized_trie_rtl: (normalized_trie_rtl, vec![]),
             encode_special_tokens: false,
         }
     }
@@ -326,60 +351,103 @@ impl AddedVocabulary {
     /// non-normalized string, and one matching against the normalized one.
     fn refresh_added_tokens<N: Normalizer>(&mut self, model: &impl Model, normalizer: Option<&N>) {
         type TupleTokenId<'a> = (&'a AddedToken, u32);
-        let (normalized, non_normalized): (Vec<TupleTokenId>, Vec<TupleTokenId>) = self
+        let (ltr_tokens, rtl_tokens): (Vec<&AddedToken>, Vec<&AddedToken>) = self
             .special_tokens
             .iter()
             .chain(self.added_tokens.iter())
-            .map(|token| {
-                (
-                    token,
-                    self.token_to_id(&token.content, model)
-                        .expect("Missing additional token"),
+            .partition(|token| !token.rtl);
+
+        for (tokens, is_rtl) in vec![(&ltr_tokens, false), (&rtl_tokens, true)] {
+            let (normalized, non_normalized): (Vec<TupleTokenId>, Vec<TupleTokenId>) = tokens
+                .iter()
+                .map(|&token| {
+                    (
+                        token,
+                        self.token_to_id(&token.content, model)
+                            .expect("Missing additional token"),
+                    )
+                })
+                .partition(|(token, _)| token.normalized);
+            let (tokens, ids): (Vec<&AddedToken>, Vec<u32>) = non_normalized.into_iter().unzip();
+            let trie = AhoCorasickBuilder::new()
+                .match_kind(MatchKind::LeftmostLongest)
+                .build(
+                    tokens.iter()
+                        .map(|token| {
+                            if is_rtl {
+                                token.content.chars().rev().collect::<String>()
+                            } else {
+                                token.content.to_owned()
+                            }
+                        })
                 )
-            })
-            .partition(|(token, _)| token.normalized);
+                .expect("Failed to build tried when refreshing tokens");
 
-        let (tokens, ids): (Vec<&AddedToken>, Vec<u32>) = non_normalized.into_iter().unzip();
-        let trie = AhoCorasickBuilder::new()
-            .match_kind(MatchKind::LeftmostLongest)
-            .build(tokens.iter().map(|token| &token.content))
-            .expect("Failed to build tried when refreshing tokens");
-        self.split_trie = (trie, ids);
+            let (ntokens, nids): (Vec<&AddedToken>, Vec<u32>) = normalized.into_iter().unzip();
+            let patterns: Vec<_> = ntokens
+                .iter()
+                .map(|token| {
+                    let mut content = NormalizedString::from(token.content.as_ref());
+                    if let Some(n) = normalizer {
+                        n.normalize(&mut content).unwrap();
+                    }
+                    content
+                })
+                .collect();
+            // TODO USE MACROS ?
+            let normalized_trie = AhoCorasickBuilder::new()
+                .match_kind(MatchKind::LeftmostLongest)
+                .build(patterns.iter().map(|content| {
+                    if is_rtl {
+                        content.get().chars().rev().collect::<String>()
+                    } else {
+                        content.get().to_owned()
+                    }
+                }))
+                .expect("Failed to build tried when refreshing tokens (normalized)");
 
-        let (ntokens, nids): (Vec<&AddedToken>, Vec<u32>) = normalized.into_iter().unzip();
-        let patterns: Vec<_> = ntokens
-            .iter()
-            .map(|token| {
-                let mut content = NormalizedString::from(token.content.as_ref());
-                if let Some(n) = normalizer {
-                    n.normalize(&mut content).unwrap();
-                }
-                content
-            })
-            .collect();
-        let normalized_trie = AhoCorasickBuilder::new()
-            .match_kind(MatchKind::LeftmostLongest)
-            .build(patterns.iter().map(|content| content.get()))
-            .expect("Failed to build tried when refreshing tokens (normalized)");
-        self.split_normalized_trie = (normalized_trie, nids);
+            if is_rtl {
+                self.split_trie_rtl = (trie, ids);
+                self.split_normalized_trie_rtl = (normalized_trie, nids);
+            } else {
+                self.split_trie = (trie, ids);
+                self.split_normalized_trie = (normalized_trie, nids);
+            }
+        }
     }
 
     /// Find any AddedToken in the given sentence, using the provided MatchingSet.
     /// This method returns a list "splits", each of them being a pair of Offsets
     /// and an optional ID if it is an AddedToken.
     /// The list of splits cover the entire input string.
-    fn find_matches(&self, sentence: &str, split_re: &MatchingSet) -> Vec<(Option<u32>, Offsets)> {
+    fn find_matches(&self, sentence: &str, split_re: &MatchingSet, rtl: bool) -> Vec<(Option<u32>, Offsets)> {
         if sentence.is_empty() {
             return vec![(None, (0, 0))];
         }
 
         let mut start_offset = 0;
         let mut splits = vec![];
+        let search_sentence = if rtl {
+            sentence.chars().rev().collect::<String>()
+        } else {
+            sentence.to_owned()
+        };
 
-        for mat in split_re.0.find_iter(sentence) {
-            let mut start = mat.start();
-            let mut stop = mat.end();
-            let aho_id = mat.pattern();
+        let mut items: Vec<_> = (
+            split_re.0.find_iter(&search_sentence)
+                .map(|mat| {
+                    let mut start = mat.start();
+                    let mut stop = mat.end();
+                    if rtl {
+                        (start, stop) = (sentence.len() - stop, sentence.len() - start);
+                    }
+                    (start, stop, mat.pattern())
+                })
+        ).collect();
+        if rtl {
+            items.reverse();
+        }
+        for (mut start, mut stop, aho_id) in items{
             let id = split_re.1[aho_id];
             let added_token = &self.added_tokens_map_r.get(&id).unwrap();
 
@@ -432,8 +500,9 @@ impl AddedVocabulary {
         &self,
         sentence: NormalizedString,
         split_re: &MatchingSet,
+        rtl: bool,
     ) -> Vec<(NormalizedString, Option<Vec<Token>>)> {
-        self.find_matches(sentence.get(), split_re)
+        self.find_matches(sentence.get(), split_re, rtl)
             .into_iter()
             .map(|(id, byte_offsets)| {
                 let slice = sentence
@@ -464,9 +533,16 @@ impl AddedVocabulary {
         let mut pretokenized: PreTokenizedString = sequence.into();
 
         // 1. We extract all the non-normalized tokens from the non-normalized string
-        pretokenized
-            .split(|_, sequence| Ok(self.split_with_indices(sequence, &self.split_trie)))
-            .expect("AddedVocabulary bad split");
+        if (self.split_trie_rtl.1.len()) > 0 {
+            pretokenized
+                .split(|_, sequence| Ok(self.split_with_indices(sequence, &self.split_trie_rtl, true)))
+                .expect("AddedVocabulary bad split");
+        }
+        if (self.split_trie.1.len()) > 0 {
+            pretokenized
+                .split(|_, sequence| Ok(self.split_with_indices(sequence, &self.split_trie, false)))
+                .expect("AddedVocabulary bad split");
+        }
 
         // <s> normalized = False
         // "I read a book   <s>Hey" -> "I read a book", "   <s>", "Hey"
@@ -481,12 +557,26 @@ impl AddedVocabulary {
         // "I read a [DAY] monday" -> "I read a " "[DAY]", "book monday"
         //                                         320055
         // 2. Then extract the normalized tokens from the normalized pieces of the string
-        pretokenized
-            .split(|_, mut sequence| {
-                normalizer.map(|n| n.normalize(&mut sequence));
-                Ok(self.split_with_indices(sequence, &self.split_normalized_trie))
-            })
-            .expect("AddedVocabulary bad split");
+
+        pretokenized.split(|_, mut sequence| {
+            normalizer.map(|n| n.normalize(&mut sequence));
+            Ok([sequence])
+        }).expect("Bad normalization");
+
+        if (self.split_normalized_trie_rtl.1.len()) > 0 {
+            pretokenized
+                .split(|_, mut sequence| {
+                    Ok(self.split_with_indices(sequence, &self.split_normalized_trie_rtl, true))
+                })
+                .expect("AddedVocabulary bad split");
+        }
+        if (self.split_normalized_trie.1.len()) > 0 {
+            pretokenized
+                .split(|_, mut sequence| {
+                    Ok(self.split_with_indices(sequence, &self.split_normalized_trie, false))
+                })
+                .expect("AddedVocabulary bad split");
+        }
 
         // ["I read a book", "   <s>", "Hey"] -> ["▁I read a book", "▁   <s>", "▁Hey"]
         // ["▁I read a book", "▁   <s>", "▁Hey"] -> [.., "▁   ", "<s>", "▁Hey"]
@@ -557,7 +647,7 @@ mod tests {
     impl ModelMock {
         pub fn new<I>(iter: I) -> Self
         where
-            I: IntoIterator<Item = &'static (&'static str, u32)>,
+            I: IntoIterator<Item=&'static (&'static str, u32)>,
         {
             let vocab: HashMap<String, u32> = iter
                 .into_iter()
@@ -599,7 +689,7 @@ mod tests {
         }
         fn feed<I, S, F>(&mut self, _iterator: I, _process: F) -> Result<()>
         where
-            I: Iterator<Item = S> + Send,
+            I: Iterator<Item=S> + Send,
             S: AsRef<str> + Send,
             F: Fn(&str) -> Result<Vec<String>> + Sync,
         {
@@ -846,7 +936,7 @@ mod tests {
     #[test]
     fn empty_matches() {
         let vocab = AddedVocabulary::new();
-        let matches = vocab.find_matches("", &vocab.split_trie);
+        let matches = vocab.find_matches("", &vocab.split_trie, false);
         assert_eq!(matches, vec![(None, (0, 0))]);
     }
 
@@ -1026,7 +1116,7 @@ mod tests {
                         .map(|t| t.iter().map(|t| t.id).collect::<Vec<_>>())
                 ))
                 .collect::<Vec<_>>(),
-            vec![("my", Some(vec![0])), ("ä»Ĭ", Some(vec![1])),]
+            vec![("my", Some(vec![0])), ("ä»Ĭ", Some(vec![1])), ]
         );
     }
 }

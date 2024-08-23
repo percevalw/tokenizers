@@ -67,6 +67,7 @@ pub struct PyAddedToken {
     pub lstrip: Option<bool>,
     pub rstrip: Option<bool>,
     pub normalized: Option<bool>,
+    pub rtl: Option<bool>,
 }
 impl PyAddedToken {
     pub fn from<S: Into<String>>(content: S, special: Option<bool>) -> Self {
@@ -77,6 +78,7 @@ impl PyAddedToken {
             lstrip: None,
             rstrip: None,
             normalized: None,
+            rtl: None,
         }
     }
 
@@ -95,6 +97,9 @@ impl PyAddedToken {
         if let Some(n) = self.normalized {
             token = token.normalized(n);
         }
+        if let Some(rtl) = self.rtl {
+            token = token.rtl(rtl);
+        }
 
         token
     }
@@ -109,6 +114,7 @@ impl PyAddedToken {
         dict.set_item("rstrip", token.rstrip)?;
         dict.set_item("normalized", token.normalized)?;
         dict.set_item("special", token.special)?;
+        dict.set_item("rtl", token.rtl)?;
 
         Ok(dict)
     }
@@ -123,6 +129,7 @@ impl From<tk::AddedToken> for PyAddedToken {
             rstrip: Some(token.rstrip),
             normalized: Some(token.normalized),
             special: token.special,
+            rtl: Some(token.rtl),
         }
     }
 }
@@ -143,6 +150,7 @@ impl PyAddedToken {
                     "rstrip" => token.rstrip = Some(value.extract()?),
                     "normalized" => token.normalized = Some(value.extract()?),
                     "special" => token.special = value.extract()?,
+                    "rtl" => token.rtl = Some(value.extract()?),
                     _ => println!("Ignored unknown kwarg option {}", key),
                 }
             }

@@ -3,7 +3,7 @@ pub(crate) mod cache;
 pub(crate) mod from_pretrained;
 
 #[cfg(feature = "unstable_wasm")]
-mod fancy;
+pub mod fancy;
 #[cfg(feature = "unstable_wasm")]
 pub use fancy::SysRegex;
 #[cfg(not(feature = "unstable_wasm"))]
