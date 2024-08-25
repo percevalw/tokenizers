@@ -15,7 +15,7 @@ use tk::pre_tokenizers::metaspace::{Metaspace, PrependScheme};
 use tk::pre_tokenizers::punctuation::Punctuation;
 use tk::pre_tokenizers::split::Split;
 use tk::pre_tokenizers::unicode_scripts::UnicodeScripts;
-use tk::pre_tokenizers::whitespace::{Whitespace, WhitespaceSplit};
+use tk::pre_tokenizers::whitespace::{EditBoundaries, Whitespace, WhitespaceSplit, EditBoundariesBehavior};
 use tk::pre_tokenizers::PreTokenizerWrapper;
 use tk::tokenizer::Offsets;
 use tk::{PreTokenizedString, PreTokenizer};
@@ -76,6 +76,9 @@ impl PyPreTokenizer {
                         }
                         PreTokenizerWrapper::WhitespaceSplit(_) => {
                             Py::new(py, (PyWhitespaceSplit {}, base))?.into_py(py)
+                        }
+                        PreTokenizerWrapper::EditBoundaries(_) => {
+                            Py::new(py, (PyEditBoundaries {}, base))?.into_py(py)
                         }
                         PreTokenizerWrapper::ByteLevel(_) => {
                             Py::new(py, (PyByteLevel {}, base))?.into_py(py)
@@ -323,6 +326,45 @@ impl PyWhitespaceSplit {
     #[pyo3(text_signature = "(self)")]
     fn new() -> (Self, PyPreTokenizer) {
         (PyWhitespaceSplit {}, WhitespaceSplit.into())
+    }
+}
+
+
+#[derive(Clone)]
+pub struct PyEditBoundariesBehavior(pub EditBoundariesBehavior);
+
+impl FromPyObject<'_> for PyEditBoundariesBehavior {
+    fn extract(obj: &PyAny) -> PyResult<Self> {
+        let s = obj.extract::<&str>()?;
+
+        Ok(Self(match s {
+            "ensure_space" => Ok(EditBoundariesBehavior::EnsureSpace),
+            "strip_space" => Ok(EditBoundariesBehavior::StripSpace),
+            "none" => Ok(EditBoundariesBehavior::None),
+            _ => Err(exceptions::PyValueError::new_err(
+                "Wrong value for EditBoundariesBehavior, expected one of: \
+                `ensure_space`, `strip_space`",
+            )),
+        }?))
+    }
+}
+
+impl From<PyEditBoundariesBehavior> for EditBoundariesBehavior {
+    fn from(v: PyEditBoundariesBehavior) -> Self {
+        v.0
+    }
+}
+
+
+/// This pre-tokenizer removes the leading whitespace
+#[pyclass(extends=PyPreTokenizer, module = "tokenizers.pre_tokenizers", name = "EditBoundaries")]
+pub struct PyEditBoundaries {}
+#[pymethods]
+impl PyEditBoundaries {
+    #[new]
+    #[pyo3( signature = (left = PyEditBoundariesBehavior(EditBoundariesBehavior::None), right = PyEditBoundariesBehavior(EditBoundariesBehavior::None)), text_signature = "(self, left=\"none\", right=\"none\")")]
+    fn new(left: PyEditBoundariesBehavior, right: PyEditBoundariesBehavior) -> (Self, PyPreTokenizer) {
+        (PyEditBoundaries {}, EditBoundaries::new(left.into(), right.into()).into())
     }
 }
 
@@ -761,6 +803,7 @@ pub fn pre_tokenizers(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyByteLevel>()?;
     m.add_class::<PyWhitespace>()?;
     m.add_class::<PyWhitespaceSplit>()?;
+    m.add_class::<PyEditBoundaries>()?;
     m.add_class::<PySplit>()?;
     m.add_class::<PyBertPreTokenizer>()?;
     m.add_class::<PyMetaspace>()?;

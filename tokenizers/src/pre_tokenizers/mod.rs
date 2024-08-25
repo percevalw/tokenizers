@@ -20,7 +20,7 @@ use crate::pre_tokenizers::punctuation::Punctuation;
 use crate::pre_tokenizers::sequence::Sequence;
 use crate::pre_tokenizers::split::Split;
 use crate::pre_tokenizers::unicode_scripts::UnicodeScripts;
-use crate::pre_tokenizers::whitespace::{Whitespace, WhitespaceSplit};
+use crate::pre_tokenizers::whitespace::{Whitespace, WhitespaceSplit, EditBoundaries};
 use crate::{PreTokenizedString, PreTokenizer};
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -35,6 +35,7 @@ pub enum PreTokenizerWrapper {
     Split(Split),
     Punctuation(Punctuation),
     WhitespaceSplit(WhitespaceSplit),
+    EditBoundaries(EditBoundaries),
     Digits(Digits),
     UnicodeScripts(UnicodeScripts),
 }
@@ -51,6 +52,7 @@ impl PreTokenizer for PreTokenizerWrapper {
             Self::Sequence(tok) => tok.pre_tokenize(normalized),
             Self::Split(tok) => tok.pre_tokenize(normalized),
             Self::WhitespaceSplit(wspt) => wspt.pre_tokenize(normalized),
+            Self::EditBoundaries(wspt) => wspt.pre_tokenize(normalized),
             Self::Digits(wspt) => wspt.pre_tokenize(normalized),
             Self::UnicodeScripts(us) => us.pre_tokenize(normalized),
         }
@@ -80,6 +82,7 @@ impl<'de> Deserialize<'de> for PreTokenizerWrapper {
             Split,
             Punctuation,
             WhitespaceSplit,
+            EditBoundaries,
             Digits,
             UnicodeScripts,
         }
@@ -103,6 +106,7 @@ impl<'de> Deserialize<'de> for PreTokenizerWrapper {
             Split(Split),
             Punctuation(Punctuation),
             WhitespaceSplit(WhitespaceSplit),
+            EditBoundaries(EditBoundaries),
             Digits(Digits),
             UnicodeScripts(UnicodeScripts),
         }
@@ -146,6 +150,9 @@ impl<'de> Deserialize<'de> for PreTokenizerWrapper {
                     EnumType::WhitespaceSplit => PreTokenizerWrapper::WhitespaceSplit(
                         serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
+                    EnumType::EditBoundaries => PreTokenizerWrapper::EditBoundaries(
+                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                    ),
                     EnumType::Digits => PreTokenizerWrapper::Digits(
                         serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
@@ -183,6 +190,9 @@ impl<'de> Deserialize<'de> for PreTokenizerWrapper {
                     PreTokenizerUntagged::WhitespaceSplit(whitespace_split) => {
                         PreTokenizerWrapper::WhitespaceSplit(whitespace_split)
                     }
+                    PreTokenizerUntagged::EditBoundaries(whitespace_split) => {
+                        PreTokenizerWrapper::EditBoundaries(whitespace_split)
+                    }
                     PreTokenizerUntagged::Digits(digits) => PreTokenizerWrapper::Digits(digits),
                     PreTokenizerUntagged::UnicodeScripts(unicode_scripts) => {
                         PreTokenizerWrapper::UnicodeScripts(unicode_scripts)
@@ -202,6 +212,7 @@ impl_enum_from!(Sequence, PreTokenizerWrapper, Sequence);
 impl_enum_from!(Split, PreTokenizerWrapper, Split);
 impl_enum_from!(Metaspace, PreTokenizerWrapper, Metaspace);
 impl_enum_from!(WhitespaceSplit, PreTokenizerWrapper, WhitespaceSplit);
+impl_enum_from!(EditBoundaries, PreTokenizerWrapper, EditBoundaries);
 impl_enum_from!(Digits, PreTokenizerWrapper, Digits);
 impl_enum_from!(UnicodeScripts, PreTokenizerWrapper, UnicodeScripts);
 

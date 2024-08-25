@@ -132,6 +132,7 @@ extern crate lazy_static;
 
 #[macro_use]
 extern crate derive_builder;
+extern crate core;
 
 #[macro_use]
 pub mod utils;

@@ -647,7 +647,7 @@ mod tests {
     impl ModelMock {
         pub fn new<I>(iter: I) -> Self
         where
-            I: IntoIterator<Item=&'static (&'static str, u32)>,
+            I: IntoIterator<Item = &'static (&'static str, u32)>,
         {
             let vocab: HashMap<String, u32> = iter
                 .into_iter()
@@ -689,7 +689,7 @@ mod tests {
         }
         fn feed<I, S, F>(&mut self, _iterator: I, _process: F) -> Result<()>
         where
-            I: Iterator<Item=S> + Send,
+            I: Iterator<Item = S> + Send,
             S: AsRef<str> + Send,
             F: Fn(&str) -> Result<Vec<String>> + Sync,
         {
@@ -1116,7 +1116,7 @@ mod tests {
                         .map(|t| t.iter().map(|t| t.id).collect::<Vec<_>>())
                 ))
                 .collect::<Vec<_>>(),
-            vec![("my", Some(vec![0])), ("ä»Ĭ", Some(vec![1])), ]
+            vec![("my", Some(vec![0])), ("ä»Ĭ", Some(vec![1])),]
         );
     }
 }
