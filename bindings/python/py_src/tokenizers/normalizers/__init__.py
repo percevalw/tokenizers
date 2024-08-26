@@ -7,6 +7,7 @@ NFD = normalizers.NFD
 NFKD = normalizers.NFKD
 NFC = normalizers.NFC
 NFKC = normalizers.NFKC
+AnyASCII = normalizers.AnyASCII
 Sequence = normalizers.Sequence
 Lowercase = normalizers.Lowercase
 Prepend = normalizers.Prepend
@@ -17,7 +18,7 @@ Precompiled = normalizers.Precompiled
 Replace = normalizers.Replace
 ByteLevel = normalizers.ByteLevel
 
-NORMALIZERS = {"nfc": NFC, "nfd": NFD, "nfkc": NFKC, "nfkd": NFKD}
+NORMALIZERS = {"nfc": NFC, "nfd": NFD, "nfkc": NFKC, "nfkd": NFKD, "any_ascii": AnyASCII}
 
 
 def unicode_normalizer_from_str(normalizer: str) -> Normalizer:

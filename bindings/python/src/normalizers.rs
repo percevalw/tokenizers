@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use pyo3::types::*;
 use pyo3::{exceptions, prelude::*};
 use std::sync::{Arc, RwLock};
@@ -8,7 +9,7 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tk::normalizers::{
     BertNormalizer, ByteLevel, Lowercase, Nmt, NormalizerWrapper, Precompiled, Prepend, Replace,
-    Strip, StripAccents, NFC, NFD, NFKC, NFKD,
+    Strip, StripAccents, NFC, NFD, NFKC, NFKD, AnyASCII,
 };
 use tk::{NormalizedString, Normalizer};
 use tokenizers as tk;
@@ -78,6 +79,7 @@ impl PyNormalizer {
                     NormalizerWrapper::NFD(_) => Py::new(py, (PyNFD {}, base))?.into_py(py),
                     NormalizerWrapper::NFKC(_) => Py::new(py, (PyNFKC {}, base))?.into_py(py),
                     NormalizerWrapper::NFKD(_) => Py::new(py, (PyNFKD {}, base))?.into_py(py),
+                    NormalizerWrapper::AnyASCII(_) => Py::new(py, (PyAnyASCII {}, base))?.into_py(py),
                     NormalizerWrapper::Lowercase(_) => {
                         Py::new(py, (PyLowercase {}, base))?.into_py(py)
                     }
@@ -317,6 +319,31 @@ impl PyNFKD {
     #[pyo3(text_signature = "(self)")]
     fn new() -> (Self, PyNormalizer) {
         (PyNFKD {}, NFKD.into())
+    }
+}
+
+
+/// AnyASCII Unicode Normalizer
+#[pyclass(extends=PyNormalizer, module = "tokenizers.normalizers", name = "AnyASCII")]
+pub struct PyAnyASCII {}
+#[pymethods]
+impl PyAnyASCII {
+    #[new]
+    #[pyo3(signature = (
+        kept_pattern = None,
+        char_map = None,
+    ), text_signature = "(self, kept_pattern=[], char_map=[])")]
+    fn new(
+        kept_pattern: Option<String>,
+        char_map: Option<HashMap<char, String>>,
+    ) -> PyResult<(Self, PyNormalizer)> {
+        Ok((
+            PyAnyASCII {},
+            ToPyResult(AnyASCII::new(
+                kept_pattern,
+                char_map,
+            )).into_py()?.into(),
+        ))
     }
 }
 
@@ -682,6 +709,7 @@ pub fn normalizers(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyNFKD>()?;
     m.add_class::<PyNFC>()?;
     m.add_class::<PyNFKC>()?;
+    m.add_class::<PyAnyASCII>()?;
     m.add_class::<PySequence>()?;
     m.add_class::<PyLowercase>()?;
     m.add_class::<PyStrip>()?;

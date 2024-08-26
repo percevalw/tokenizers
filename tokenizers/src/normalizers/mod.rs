@@ -12,7 +12,7 @@ pub use crate::normalizers::precompiled::Precompiled;
 pub use crate::normalizers::prepend::Prepend;
 pub use crate::normalizers::replace::Replace;
 pub use crate::normalizers::strip::{Strip, StripAccents};
-pub use crate::normalizers::unicode::{Nmt, NFC, NFD, NFKC, NFKD};
+pub use crate::normalizers::unicode::{Nmt, NFC, NFD, NFKC, NFKD, AnyASCII};
 pub use crate::normalizers::utils::{Lowercase, Sequence};
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -29,6 +29,7 @@ pub enum NormalizerWrapper {
     NFD(NFD),
     NFKC(NFKC),
     NFKD(NFKD),
+    AnyASCII(AnyASCII),
     Sequence(Sequence),
     Lowercase(Lowercase),
     Nmt(Nmt),
@@ -59,6 +60,7 @@ impl<'de> Deserialize<'de> for NormalizerWrapper {
             NFD,
             NFKC,
             NFKD,
+            AnyASCII,
             Sequence,
             Lowercase,
             Nmt,
@@ -85,6 +87,7 @@ impl<'de> Deserialize<'de> for NormalizerWrapper {
             NFD(NFD),
             NFKC(NFKC),
             NFKD(NFKD),
+            AnyASCII(AnyASCII),
             Sequence(Sequence),
             Lowercase(Lowercase),
             Nmt(Nmt),
@@ -124,6 +127,9 @@ impl<'de> Deserialize<'de> for NormalizerWrapper {
                         serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::NFKD => NormalizerWrapper::NFKD(
+                        serde_json::from_value(values).map_err(serde::de::Error::custom)?,
+                    ),
+                    EnumType::AnyASCII => NormalizerWrapper::AnyASCII(
                         serde_json::from_value(values).map_err(serde::de::Error::custom)?,
                     ),
                     EnumType::Sequence => NormalizerWrapper::Sequence(
@@ -168,6 +174,7 @@ impl<'de> Deserialize<'de> for NormalizerWrapper {
                     NormalizerUntagged::NFD(bpe) => NormalizerWrapper::NFD(bpe),
                     NormalizerUntagged::NFKC(bpe) => NormalizerWrapper::NFKC(bpe),
                     NormalizerUntagged::NFKD(bpe) => NormalizerWrapper::NFKD(bpe),
+                    NormalizerUntagged::AnyASCII(bpe) => NormalizerWrapper::AnyASCII(bpe),
                     NormalizerUntagged::Sequence(bpe) => NormalizerWrapper::Sequence(bpe),
                     NormalizerUntagged::Lowercase(bpe) => NormalizerWrapper::Lowercase(bpe),
                     NormalizerUntagged::Nmt(bpe) => NormalizerWrapper::Nmt(bpe),
@@ -191,6 +198,7 @@ impl Normalizer for NormalizerWrapper {
             Self::NFD(nfd) => nfd.normalize(normalized),
             Self::NFKC(nfkc) => nfkc.normalize(normalized),
             Self::NFKD(nfkd) => nfkd.normalize(normalized),
+            Self::AnyASCII(any_ascii) => any_ascii.normalize(normalized),
             Self::Sequence(sequence) => sequence.normalize(normalized),
             Self::Lowercase(lc) => lc.normalize(normalized),
             Self::Nmt(lc) => lc.normalize(normalized),
@@ -207,6 +215,7 @@ impl_enum_from!(NFKD, NormalizerWrapper, NFKD);
 impl_enum_from!(NFKC, NormalizerWrapper, NFKC);
 impl_enum_from!(NFC, NormalizerWrapper, NFC);
 impl_enum_from!(NFD, NormalizerWrapper, NFD);
+impl_enum_from!(AnyASCII, NormalizerWrapper, AnyASCII);
 impl_enum_from!(Strip, NormalizerWrapper, StripNormalizer);
 impl_enum_from!(StripAccents, NormalizerWrapper, StripAccents);
 impl_enum_from!(Sequence, NormalizerWrapper, Sequence);
