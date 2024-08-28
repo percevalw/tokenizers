@@ -247,7 +247,10 @@ impl UnigramTrainer {
                 if !self.is_valid_sentencepiece(string) {
                     return None;
                 }
-                let score = freq * string.len() as u32;
+                // freq is the number of times the substring appears in the corpus
+                // This score favors long and frequent substrings at the beginning
+                // of the training.
+                let score: f64 = ((freq as f64) * string.len() as f64);
                 // if let Some(p) = &progress {
                 //     p.inc(1);
                 // }
@@ -257,11 +260,11 @@ impl UnigramTrainer {
 
         // Fill seed_sentencepieces
         for (count, character) in sall_chars {
-            seed_sentencepieces.push((character.to_string(), count.into()));
+            seed_sentencepieces.push((character.to_string(), (count as f64) / 10.));
         }
 
         // sort by decreasing score
-        substr_index.sort_by_key(|&a| Reverse(a));
+        substr_index.sort_by(|(a, _), (b, _)| b.partial_cmp(a).unwrap());
         for (score, char_string) in substr_index {
             // Just in case
             assert!(self.is_valid_sentencepiece(char_string));
