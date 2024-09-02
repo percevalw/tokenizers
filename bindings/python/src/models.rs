@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use tk::models::bpe::{BpeBuilder, Merges, Vocab, BPE};
 use tk::models::unigram::Unigram;
 use tk::models::wordlevel::WordLevel;
+use tk::models::noop::Noop;
 use tk::models::wordpiece::{WordPiece, WordPieceBuilder};
 use tk::models::ModelWrapper;
 use tk::{Model, Token};
@@ -38,6 +39,7 @@ impl PyModel {
             ModelWrapper::BPE(_) => Py::new(py, (PyBPE {}, base))?.into_py(py),
             ModelWrapper::WordPiece(_) => Py::new(py, (PyWordPiece {}, base))?.into_py(py),
             ModelWrapper::WordLevel(_) => Py::new(py, (PyWordLevel {}, base))?.into_py(py),
+            ModelWrapper::Noop(_) => Py::new(py, (PyNoop {}, base))?.into_py(py),
             ModelWrapper::Unigram(_) => Py::new(py, (PyUnigram {}, base))?.into_py(py),
         })
     }
@@ -860,6 +862,24 @@ impl PyUnigram {
     }
 }
 
+/// Noop tokenizer
+///
+/// Args:
+///     vocab (:obj:`List[Tuple[str, float]]`, `optional`, `optional`):
+///         A list of vocabulary items and their relative score [("am", -0.2442),...]
+#[pyclass(extends=PyModel, module = "tokenizers.models", name = "Noop")]
+pub struct PyNoop {}
+
+#[pymethods]
+impl PyNoop {
+    #[new]
+    #[pyo3(text_signature = "(self)")]
+    fn new() -> PyResult<(Self, PyModel)> {
+        let model = Noop::default();
+        Ok((PyNoop {}, model.into()))
+    }
+}
+
 /// Models Module
 #[pymodule]
 pub fn models(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -868,6 +888,7 @@ pub fn models(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyWordPiece>()?;
     m.add_class::<PyWordLevel>()?;
     m.add_class::<PyUnigram>()?;
+    m.add_class::<PyNoop>()?;
     Ok(())
 }
 

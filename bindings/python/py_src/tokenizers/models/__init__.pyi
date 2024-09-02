@@ -345,7 +345,7 @@ class WordLevel(Model):
         unk_token (:obj:`str`, `optional`):
             The unknown token to be used by the model.
     """
-    def __init__(self, vocab, unk_token):
+    def __init__(self, vocab, unk_token, with_ids):
         pass
 
     @staticmethod

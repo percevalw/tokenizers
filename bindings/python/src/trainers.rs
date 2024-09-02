@@ -39,6 +39,9 @@ impl PyTrainer {
             TrainerWrapper::UnigramTrainer(_) => {
                 Py::new(py, (PyUnigramTrainer {}, base))?.into_py(py)
             }
+            TrainerWrapper::NoopTrainer(_) => {
+                Py::new(py, (PyNoopTrainer {}, base))?.into_py(py)
+            }
         })
     }
 }
@@ -881,6 +884,19 @@ impl PyUnigramTrainer {
     }
 }
 
+/// Trainer that does nothing, for the Noop model
+#[pyclass(extends=PyTrainer, module = "tokenizers.trainers", name = "NoopTrainer")]
+pub struct PyNoopTrainer {}
+#[pymethods]
+impl PyNoopTrainer {
+    #[new]
+    #[pyo3(text_signature = "($self)")]
+    pub fn new() -> PyResult<(Self, PyTrainer)> {
+        Ok((PyNoopTrainer {}, TrainerWrapper::NoopTrainer(Default::default()).into()))
+    }
+}
+
+
 /// Trainers Module
 #[pymodule]
 pub fn trainers(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -889,6 +905,7 @@ pub fn trainers(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyWordPieceTrainer>()?;
     m.add_class::<PyWordLevelTrainer>()?;
     m.add_class::<PyUnigramTrainer>()?;
+    m.add_class::<PyNoopTrainer>()?;
     Ok(())
 }
 

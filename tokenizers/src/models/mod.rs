@@ -4,6 +4,7 @@ pub mod bpe;
 pub mod unigram;
 pub mod wordlevel;
 pub mod wordpiece;
+pub mod noop;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -14,6 +15,7 @@ use crate::models::bpe::{BpeTrainer, BPE};
 use crate::models::unigram::{Unigram, UnigramTrainer};
 use crate::models::wordlevel::{WordLevel, WordLevelTrainer};
 use crate::models::wordpiece::{WordPiece, WordPieceTrainer};
+use crate::models::noop::{Noop, NoopTrainer};
 use crate::{AddedToken, Model, Result, Token, Trainer};
 
 /// Wraps a vocab mapping (ID -> token) to a struct that will be serialized in order
@@ -66,6 +68,7 @@ pub enum ModelWrapper {
     WordPiece(WordPiece),
     WordLevel(WordLevel),
     Unigram(Unigram),
+    Noop(Noop),
 }
 
 impl<'de> Deserialize<'de> for ModelWrapper {
@@ -104,6 +107,7 @@ impl<'de> Deserialize<'de> for ModelWrapper {
             WordPiece(WordPiece),
             WordLevel(WordLevel),
             Unigram(Unigram),
+            Noop(Noop),
         }
 
         let helper = ModelHelper::deserialize(deserializer)?;
@@ -129,6 +133,7 @@ impl<'de> Deserialize<'de> for ModelWrapper {
                     ModelUntagged::WordPiece(bpe) => ModelWrapper::WordPiece(bpe),
                     ModelUntagged::WordLevel(bpe) => ModelWrapper::WordLevel(bpe),
                     ModelUntagged::Unigram(bpe) => ModelWrapper::Unigram(bpe),
+                    ModelUntagged::Noop(bpe) => ModelWrapper::Noop(bpe),
                 }
             }
         })
@@ -139,6 +144,7 @@ impl_enum_from!(WordLevel, ModelWrapper, WordLevel);
 impl_enum_from!(WordPiece, ModelWrapper, WordPiece);
 impl_enum_from!(BPE, ModelWrapper, BPE);
 impl_enum_from!(Unigram, ModelWrapper, Unigram);
+impl_enum_from!(Noop, ModelWrapper, Noop);
 
 impl Model for ModelWrapper {
     type Trainer = TrainerWrapper;
@@ -149,6 +155,7 @@ impl Model for ModelWrapper {
             Self::WordPiece(t) => t.tokenize(tokens),
             Self::BPE(t) => t.tokenize(tokens),
             Self::Unigram(t) => t.tokenize(tokens),
+            Self::Noop(t) => t.tokenize(tokens),
         }
     }
 
@@ -158,6 +165,7 @@ impl Model for ModelWrapper {
             Self::WordPiece(t) => t.token_to_id(token),
             Self::BPE(t) => t.token_to_id(token),
             Self::Unigram(t) => t.token_to_id(token),
+            Self::Noop(t) => t.token_to_id(token),
         }
     }
 
@@ -167,6 +175,7 @@ impl Model for ModelWrapper {
             Self::WordPiece(t) => t.id_to_token(id),
             Self::BPE(t) => t.id_to_token(id),
             Self::Unigram(t) => t.id_to_token(id),
+            Self::Noop(t) => t.id_to_token(id),
         }
     }
 
@@ -176,6 +185,7 @@ impl Model for ModelWrapper {
             Self::WordPiece(t) => t.get_vocab(),
             Self::BPE(t) => t.get_vocab(),
             Self::Unigram(t) => t.get_vocab(),
+            Self::Noop(t) => t.get_vocab(),
         }
     }
 
@@ -185,6 +195,7 @@ impl Model for ModelWrapper {
             Self::WordPiece(t) => t.get_vocab_size(),
             Self::BPE(t) => t.get_vocab_size(),
             Self::Unigram(t) => t.get_vocab_size(),
+            Self::Noop(t) => t.get_vocab_size(),
         }
     }
 
@@ -194,6 +205,7 @@ impl Model for ModelWrapper {
             Self::WordPiece(t) => t.save(folder, name),
             Self::BPE(t) => t.save(folder, name),
             Self::Unigram(t) => t.save(folder, name),
+            Self::Noop(t) => t.save(folder, name),
         }
     }
 
@@ -203,6 +215,7 @@ impl Model for ModelWrapper {
             Self::WordPiece(t) => t.get_trainer().into(),
             Self::BPE(t) => t.get_trainer().into(),
             Self::Unigram(t) => t.get_trainer().into(),
+            Self::Noop(t) => t.get_trainer().into(),
         }
     }
 }
@@ -213,6 +226,7 @@ pub enum TrainerWrapper {
     WordPieceTrainer(WordPieceTrainer),
     WordLevelTrainer(WordLevelTrainer),
     UnigramTrainer(UnigramTrainer),
+    NoopTrainer(NoopTrainer),
 }
 
 impl Trainer for TrainerWrapper {
@@ -224,6 +238,7 @@ impl Trainer for TrainerWrapper {
             Self::WordPieceTrainer(wpt) => wpt.should_show_progress(),
             Self::WordLevelTrainer(wpt) => wpt.should_show_progress(),
             Self::UnigramTrainer(wpt) => wpt.should_show_progress(),
+            Self::NoopTrainer(wpt) => wpt.should_show_progress(),
         }
     }
 
@@ -245,6 +260,10 @@ impl Trainer for TrainerWrapper {
                 ModelWrapper::Unigram(u) => t.train(u),
                 _ => Err("UnigramTrainer can only train a Unigram".into()),
             },
+            Self::NoopTrainer(t) => match model {
+                ModelWrapper::Noop(u) => t.train(u),
+                _ => Err("NoopTrainer can only train a Noop".into()),
+            },
         }
     }
 
@@ -259,6 +278,7 @@ impl Trainer for TrainerWrapper {
             Self::WordPieceTrainer(wpt) => wpt.feed(iterator, process),
             Self::WordLevelTrainer(wpt) => wpt.feed(iterator, process),
             Self::UnigramTrainer(wpt) => wpt.feed(iterator, process),
+            Self::NoopTrainer(wpt) => wpt.feed(iterator, process),
         }
     }
 }
@@ -267,6 +287,7 @@ impl_enum_from!(BpeTrainer, TrainerWrapper, BpeTrainer);
 impl_enum_from!(WordPieceTrainer, TrainerWrapper, WordPieceTrainer);
 impl_enum_from!(UnigramTrainer, TrainerWrapper, UnigramTrainer);
 impl_enum_from!(WordLevelTrainer, TrainerWrapper, WordLevelTrainer);
+impl_enum_from!(NoopTrainer, TrainerWrapper, NoopTrainer);
 
 #[cfg(test)]
 mod tests {
