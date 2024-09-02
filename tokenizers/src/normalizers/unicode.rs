@@ -128,13 +128,17 @@ impl Normalizer for AnyASCII {
                                 .chars()
                                 .map(|c: char| {
                                     // First lookup the char map
-                                    if !c.is_ascii() {
-                                        let replacement = match self.char_map.get(&c) {
-                                            Some(replacement) => replacement.clone(),
-                                            None => any_ascii_char(c).to_string(),
-                                        };
-                                        return
-                                            replacement
+                                    let replacement = match self.char_map.get(&c) {
+                                        Some(replacement) => replacement.clone(),
+                                        None => {
+                                            if c.is_ascii() {
+                                                return vec![(c, 0)];
+                                            }
+                                            any_ascii_char(c).to_string()
+                                        }
+                                    };
+                                    return
+                                        replacement
                                             .chars()
                                             .enumerate()
                                             .map(|(i, new_c)| {
@@ -145,8 +149,6 @@ impl Normalizer for AnyASCII {
                                                 }
                                             })
                                             .collect::<Vec<(char, isize)>>();
-                                    }
-                                    return vec![(c, 0)]
                                 }).flatten()
                         );
                     }
@@ -159,7 +161,7 @@ impl Normalizer for AnyASCII {
                     );
                     last_offset = end;
                 });
-            }
+        }
         if last_offset < string.len() {
             transformations.extend(
                 string.get_range(Range::Normalized(last_offset..))
@@ -167,13 +169,17 @@ impl Normalizer for AnyASCII {
                     .chars()
                     .map(|c: char| {
                         // First lookup the char map
-                        if !c.is_ascii() {
-                            let replacement = match self.char_map.get(&c) {
-                                Some(replacement) => replacement.clone(),
-                                None => any_ascii_char(c).to_string(),
-                            };
-                            return
-                                replacement
+                        let replacement = match self.char_map.get(&c) {
+                            Some(replacement) => replacement.clone(),
+                            None => {
+                                if c.is_ascii() {
+                                    return vec![(c, 0)];
+                                }
+                                any_ascii_char(c).to_string()
+                            }
+                        };
+                        return
+                            replacement
                                 .chars()
                                 .enumerate()
                                 .map(|(i, new_c)| {
@@ -184,8 +190,6 @@ impl Normalizer for AnyASCII {
                                     }
                                 })
                                 .collect::<Vec<(char, isize)>>();
-                        }
-                        return vec![(c, 0)]
                     }).flatten()
             );
         }
